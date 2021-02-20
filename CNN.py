@@ -6,9 +6,10 @@ import glob
 
 # img = cv2.imread('Illinois1.png')
 class CNN:
-    def __init__(self, dir, log=[]):
-        self.log = log
+    def __init__(self, dir):
+        self.log = []
         self.dir = dir
+        self.finalWeights = None
         filenames = glob.glob(dir) #get all filenames in the specfied directory
         filenames.sort() #sort by alpha order
         self.images = [cv2.imread(img) for img in filenames] #read each file
@@ -17,28 +18,43 @@ class CNN:
 
         print(f'Loaded {len(filenames)} images from "{dir}"')
 
-    def convolve(self, tensorImg, kernel):
+    def convolve(self, kernel):
 
         #pads the image so that the input is the same as the output (to avoid losing spatial data)
         #only convolve about the 1 and 2 axes b/c those are the axes parallel to the image plane
-        convolved = signal.oaconvolve(tensorImg, kernel, 'same', axes=[1, 2]) 
-
-        self.log.append({
+        convolutionLog = {
             'type': 'convolution',
-            'input': tensorImg,
-            'kernel': kernel
-        })
+            'kernel': kernel,
+            'inputs': [], #contains all of the images that were convoluted 
+            'outputs': [] #contains all of the now convoluted images
+        }
+        for tensorImg in self.images:
+            convolved = signal.oaconvolve(tensorImg, kernel, 'same', axes=[1, 2])
+            convolutionLog['inputs'].append(tensorImg)
+            convolutionLog['outputs'].append(convolved) 
+
+        self.log.append(convolutionLog)
+        imagesConvolved = len(convolutionLog['inputs'])
+        print(f'convolved {imagesConvolved} images with size {np.shape(kernel)} kernel')
 
         return convolved
         
+    def flatten(self):
+        lastOutputs = np.array(self.log[-1]['outputs'])
+        flattenedOutputsTwo = lastOutputs.reshape(3000, -1)
+        
+
+    # def backprop(self):
+
 
 
 
 
 
 first = CNN("data/Training-Set-10/*.png")
-first.convolve(first.images[0], np.random.rand(3, 3, 3))
-ic(first.log)
+first.convolve(np.random.rand(3, 3, 3))
+first.flatten()
+# ic(first.log)
 
 
 cv2.waitKey(0)
