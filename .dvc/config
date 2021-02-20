@@ -1,0 +1,4 @@
+[core]
+    remote = cnnremote
+['remote "cnnremote"']
+    url = C:/Users/akad/Desktop/dvcCNNExternal

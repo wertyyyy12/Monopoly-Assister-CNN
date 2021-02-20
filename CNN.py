@@ -18,7 +18,7 @@ class CNN:
         print(f'Loaded {len(filenames)} images from "{dir}"')
 
     def convolve(self, tensorImg, kernel):
-        # tensorImg = np.pad(tensorImg, 1, pad_with)
+        tensorImg = np.pad(tensorImg, 1, pad_with)
         kernelSize = np.shape(kernel)[0]
         convolved = []
         kernelNumber = 0
@@ -26,8 +26,11 @@ class CNN:
             convolved.append(signal.oaconvolve(np.pad(imgChannel, int((kernelSize-1)/2), lambda vector, pad_width, iaxis, kwargs: None), kernel[kernelNumber], 'valid'))
             kernelNumber = kernelNumber + 1
             
+        ic()
+        ic(np.sum(convolved))
         
         convolved = signal.oaconvolve(tensorImg, kernel, axes=[1, 2])
+        ic()
         ic(np.shape(convolved))
         ic(np.sum(convolved))
         return convolved
@@ -37,7 +40,7 @@ class CNN:
 
 
 
-first = CNN("Training Set 10/*.png")
+first = CNN("data/Training Set 10/*.png")
 first.convolve(first.images[0], np.random.rand(3, 3, 3))
 
 
