@@ -18,21 +18,17 @@ class CNN:
         print(f'Loaded {len(filenames)} images from "{dir}"')
 
     def convolve(self, tensorImg, kernel):
-        tensorImg = np.pad(tensorImg, 1, pad_with)
-        kernelSize = np.shape(kernel)[0]
-        convolved = []
-        kernelNumber = 0
-        for imgChannel in tensorImg:
-            convolved.append(signal.oaconvolve(np.pad(imgChannel, int((kernelSize-1)/2), lambda vector, pad_width, iaxis, kwargs: None), kernel[kernelNumber], 'valid'))
-            kernelNumber = kernelNumber + 1
-            
-        ic()
-        ic(np.sum(convolved))
-        
-        convolved = signal.oaconvolve(tensorImg, kernel, axes=[1, 2])
-        ic()
-        ic(np.shape(convolved))
-        ic(np.sum(convolved))
+
+        #pads the image so that the input is the same as the output (to avoid losing spatial data)
+        #only convolve about the 1 and 2 axes b/c those are the axes parallel to the image plane
+        convolved = signal.oaconvolve(tensorImg, kernel, 'same', axes=[1, 2]) 
+
+        self.log.append({
+            'type': 'convolution',
+            'input': tensorImg,
+            'kernel': kernel
+        })
+
         return convolved
         
 
@@ -40,11 +36,9 @@ class CNN:
 
 
 
-first = CNN("data/Training Set 10/*.png")
+first = CNN("data/Training-Set-10/*.png")
 first.convolve(first.images[0], np.random.rand(3, 3, 3))
-
-
-# print('hi')
+ic(first.log)
 
 
 cv2.waitKey(0)
