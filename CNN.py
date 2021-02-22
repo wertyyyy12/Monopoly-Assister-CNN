@@ -60,13 +60,15 @@ class CNN:
 # first.convolve(first.images, np.random.rand(3000, 3, 3, 3))
 # first.flatten()
 
-def slidingWindow(image, kernel):
-    assert len(np.shape(kernel)) == 2, 'kernel must be 2d'
-    assert np.shape(kernel)[0] == np.shape(kernel)[1], 'kernel must be square'
-    kernelSize = np.shape(kernel)[0]
+def slidingWindow(imageSize, kernelSize, depth):
+    kernelSize = kernelSize[0]
     kernelCellSize = pow(kernelSize, 2)
-    imageHeight = np.shape(image)[0]
-    imageWidth = np.shape(image)[1]
+    
+    imageHeight = imageSize[0]
+    imageWidth = imageSize[1]
+    imageCellSize = imageHeight * imageWidth
+    image = np.arange(imageHeight * imageWidth).reshape(imageHeight, imageWidth)
+    image3D = np.arange(imageHeight * imageWidth * depth).reshape(imageHeight, imageWidth, depth)
     
 
     numberSlidingWindows = (imageHeight - kernelSize + 1) * (imageWidth - kernelSize + 1)
@@ -92,17 +94,41 @@ def slidingWindow(image, kernel):
 
     
     indexer = np.delete(indexer, invalidImagePortion, axis=0)  
-    # indexer = indexer[:-(imageHeight - kernelSize + 1), :] 
-    ic(indexer)
+    # indexer = indexer[:-(imageHeight - kernelSize + 1), :]
+    # indexer = np.expand_dims(indexer, axis=2)
+    # indexer = np.moveaxis(indexer, 1, 2)
 
-    return image.flatten()[indexer]
+    ic(np.shape(indexer))
+
+
+    newIndexer = []
+    for i in indexer:
+        new = []
+        for d in range(0, depth):
+            new.append(i+(d*imageCellSize))
+
+        new = np.array(new).flatten()
+
+        newIndexer.append(new)
+        # new = np.concatenate(new).flatten()
+        # y = np.resize(indexer[i], (1, 27))
+        # y = new
+
+    
+
+    ic(newIndexer)
+
+    ic(image3D.flatten())
+    # ic(indexer)
+
+    return image3D.flatten()[np.array(newIndexer)]
 
 
 
-a = np.reshape(np.arange(42), (7, 6))
+a = np.reshape(np.arange(36*3), (6, 6, 3))
 b = np.reshape(np.arange(9), (3, 3))
 
-ic(slidingWindow(a, b))
+ic(slidingWindow((6, 6), (3, 3), 3))
 
 
 
