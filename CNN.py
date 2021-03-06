@@ -67,8 +67,8 @@ def slidingWindow(imageSize, kernelSize, depth):
     imageHeight = imageSize[0]
     imageWidth = imageSize[1]
     imageCellSize = imageHeight * imageWidth
-    image = np.arange(imageHeight * imageWidth).reshape(imageHeight, imageWidth)
-    image3D = np.arange(imageHeight * imageWidth * depth).reshape(imageHeight, imageWidth, depth)
+    indices = np.arange(imageHeight * imageWidth).reshape(imageHeight, imageWidth)
+    indices3D = np.arange(imageHeight * imageWidth * depth).reshape(imageHeight, imageWidth, depth)
     
 
     numberSlidingWindows = (imageHeight - kernelSize + 1) * (imageWidth - kernelSize + 1)
@@ -80,8 +80,8 @@ def slidingWindow(imageSize, kernelSize, depth):
 
     offsets = offsets.flatten(order='F')
     wastedWindows = (imageWidth - kernelSize - 1) * imageHeight
-    invalidImagePortionH = np.delete(image, np.arange((imageWidth - kernelSize)+1), axis=1).flatten() #remove parts of the image that cant be convoluted
-    invalidImagePortionW = np.delete(image, np.arange((imageHeight - kernelSize)+1), axis=0).flatten()
+    invalidImagePortionH = np.delete(indices, np.arange((imageWidth - kernelSize)+1), axis=1).flatten() #remove parts of the image that cant be convoluted
+    invalidImagePortionW = np.delete(indices, np.arange((imageHeight - kernelSize)+1), axis=0).flatten()
 
     invalidImagePortion = np.concatenate((invalidImagePortionH, invalidImagePortionW))
     invalidImagePortion = invalidImagePortion[invalidImagePortion < (numberSlidingWindows + wastedWindows)]
@@ -98,37 +98,50 @@ def slidingWindow(imageSize, kernelSize, depth):
     # indexer = np.expand_dims(indexer, axis=2)
     # indexer = np.moveaxis(indexer, 1, 2)
 
-    ic(np.shape(indexer))
+    # ic(np.shape(indexer))
 
 
-    newIndexer = []
-    for i in indexer:
-        new = []
-        for d in range(0, depth):
-            new.append(i+(d*imageCellSize))
 
-        new = np.array(new).flatten()
+    i = np.arange(np.shape(indexer)[0])
 
-        newIndexer.append(new)
-        # new = np.concatenate(new).flatten()
-        # y = np.resize(indexer[i], (1, 27))
-        # y = new
+    d = np.arange(depth)
+    # ic(indexer[i, :])
+    newIndexer = np.zeros((np.shape(indexer)[0], (kernelCellSize * depth)))
 
+    # ic(np.array(newIndexer[:, i]+(d*imageCellSize)).shape)
+    # newIndexer[i, :] = d*imageCellSize 
+    
+    newPeek = np.zeros(depth)
+
+    #add the offsets to peek depth-wise
+    newPeek[d] = d * imageCellSize
+
+
+    oldIndexShape = indexer.shape
+    indexerCellSize = oldIndexShape[0] * oldIndexShape[1]
+    ic(indexer.shape)
+    
+    
+    # ic(indexer)
+    indexer = np.broadcast_to(indexer, (depth, indexer.shape[0], indexer.shape[1]))
+    newPeek = np.broadcast_to(newPeek[..., None], (newPeek.shape[0], indexerCellSize))
+    newPeek = np.resize(newPeek, (depth, oldIndexShape[0], oldIndexShape[1]))
+    
+    
+    newIndexer = indexer + newPeek
+    newIndexer = np.concatenate(newIndexer, axis=1)
     
 
-    ic(newIndexer)
 
-    ic(image3D.flatten())
-    # ic(indexer)
 
-    return image3D.flatten()[np.array(newIndexer)]
+    return indices3D.flatten()[np.array(newIndexer, dtype=int)]
 
 
 
 a = np.reshape(np.arange(36*3), (6, 6, 3))
 b = np.reshape(np.arange(9), (3, 3))
 
-ic(slidingWindow((6, 6), (3, 3), 3))
+ic(slidingWindow((6, 6), (3, 4), 3))
 
 
 
