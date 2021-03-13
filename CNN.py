@@ -4,15 +4,14 @@ import numpy as np
 import glob
 
 
-def slidingWindowIndices(imageSize, kernelSize, depth): #gets the relevant sliding window indices so that a kernel can be easily convolved/cross-correlated
+def slidingWindowIndices(flatImageSize, kernelSize, depth): #gets the relevant sliding window indices so that a kernel can be easily convolved/cross-correlated
     kernelSize = kernelSize[0]
     kernelCellSize = pow(kernelSize, 2)
     
-    imageHeight = imageSize[0]
-    imageWidth = imageSize[1]
+    imageHeight = flatImageSize[0]
+    imageWidth = flatImageSize[1]
     imageCellSize = imageHeight * imageWidth
-    indices = np.arange(imageHeight * imageWidth).reshape(imageHeight, imageWidth)
-    indices3D = np.arange(imageHeight * imageWidth * depth)
+    indices = np.arange(imageCellSize).reshape(imageHeight, imageWidth)
     
 
     numberSlidingWindows = (imageHeight - kernelSize + 1) * (imageWidth - kernelSize + 1)
@@ -23,17 +22,12 @@ def slidingWindowIndices(imageSize, kernelSize, depth): #gets the relevant slidi
     offsets[i, :] = (imageWidth - kernelSize) * i
 
     offsets = offsets.flatten(order='F')
-    wastedWindows = (imageWidth - kernelSize - 1) * imageHeight
-    invalidImagePortionH = np.delete(indices, np.arange((imageWidth - kernelSize)+1), axis=1).flatten() #remove parts of the image that cant be convoluted
-    invalidImagePortionW = np.delete(indices, np.arange((imageHeight - kernelSize)+1), axis=0).flatten()
 
-    invalidImagePortion = np.concatenate((invalidImagePortionH, invalidImagePortionW))
-    invalidImagePortion = invalidImagePortion[invalidImagePortion < (numberSlidingWindows + wastedWindows)]
+    numberInvalidsOnEdge = kernelSize - 1     
+    imageWithoutInvalidPortions = indices[:-numberInvalidsOnEdge, :]
+    imageWithoutInvalidPortions = imageWithoutInvalidPortions[:, :-numberInvalidsOnEdge]
 
-    indexer = np.arange(kernelCellSize).reshape(1, -1) + (np.arange(numberSlidingWindows + wastedWindows).reshape(-1, 1)) + offsets
-
-    
-    indexer = np.delete(indexer, invalidImagePortion, axis=0)  
+    indexer = np.arange(kernelCellSize).reshape(1, -1) + imageWithoutInvalidPortions.reshape(-1, 1) + offsets
 
     d = np.arange(depth)
     newIndexer = np.zeros((np.shape(indexer)[0], (kernelCellSize * depth)))
@@ -46,20 +40,20 @@ def slidingWindowIndices(imageSize, kernelSize, depth): #gets the relevant slidi
 
     oldIndexShape = indexer.shape
     indexerCellSize = oldIndexShape[0] * oldIndexShape[1]
-    
-    
+     
+    # ic(indexer)
     indexer = np.broadcast_to(indexer, (depth, indexer.shape[0], indexer.shape[1])) #extend indexer array depth-wise 
     newPeek = np.broadcast_to(newPeek[..., None], (newPeek.shape[0], indexerCellSize)) #repeat each number of newPeek (indexer.shape[0] * indexer.shape[1]) times (assume indexer isn't flattened yet)
     newPeek = np.resize(newPeek, (depth, oldIndexShape[0], oldIndexShape[1])) #resize the repeated newPeek array so that each number of the old newPeek is now a matrix of old indexer's shape 
     
+   
+    newIndexer = (indexer + newPeek).astype('int')
     
-    newIndexer = indexer + newPeek
     newIndexer = np.concatenate(newIndexer, axis=1)
-    
 
 
 
-    return indices3D.flatten()[np.array(newIndexer, dtype=int)]
+    return newIndexer
 
 class CNN:
     def __init__(self, dir):
@@ -74,22 +68,29 @@ class CNN:
 
         print(f'Loaded {len(filenames)} images from "{dir}"')
 
-    def convolve(self, images, kernel, train=False):
-
-        # convolved = signal.correlate(images, kernel, 'same')
-
+    def convolve(self, kernel, bias, train=False):
+        images = np.array(self.images)
+        #imageSize = images[0].shape
+        #print(f'flat image size was {imageSize[0]} by {imageSize[1]},', f'kernel size was {kernel.shape},', f'depth was {imageSize[2]}')
+        indices = slidingWindowIndices((36, 64), (3, 3), 3)
         
-                
+        for image in images:
+            pass
+        extendedIndices = np.broadcast_to(indices, (images.shape[0], indices.shape[0], indices.shape[1])) #extend indices array depth-wise 
+        windows = image.flatten()[indices]
+        dotProducts = np.einsum('ij,j->i', windows, kernel.flatten()) #take dot product of each sliding window with the kernel
+        dotProducts += bias
+        ic(windows.shape)
+            
 
-        #pads the image so that the input is the same as the output (to avoid losing spatial data)
-        #only convolve about the 1 and 2 axes b/c those are the axes parallel to the image plane
+
 
         if not train: 
             self.log.append({
                 'type': 'convolution',
                 'kernel': kernel,
                 'inputs': images, #contains all of the images that were convoluted 
-                'outputs': convolved #contains all of the now convoluted images
+                #'outputs': convolved #contains all of the now convoluted images
             })
 
             # print(f'convolved {np.shape(convolved)[0]} images with size {np.shape(kernel)} kernel')
@@ -102,11 +103,11 @@ class CNN:
 
 
 
+first = CNN('data/Training-Set-10/*.png')
+first.convolve(np.arange(27).reshape(3, 3, 3), 10)
 
-a = np.reshape(np.arange(36*3), (6, 6, 3))
-b = np.reshape(np.arange(9), (3, 3))
 
-ic(slidingWindowIndices((6, 6), (3, 4), 3))
+# ic(slidingWindowIndices((36, 6), (3, 3), 3))
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
