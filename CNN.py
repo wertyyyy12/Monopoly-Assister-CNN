@@ -55,10 +55,10 @@ class CNN:
         for operation in blueprint:
             operationType = operation['operationType']
             if operationType == 'convolve':
-                kernel = operation['kernel']
+                kernels = operation['kernel']
                 t.start()
                 bias = operation['bias']
-                operation['outputImageSet'] = self.convolve(kernel, bias, currentImageSet)
+                operation['outputImageSet'] = self.convolve(kernels, bias, currentImageSet)
                 currentImageSet = operation['outputImageSet']
                 print(f'Completed convolution in {t.stop()} seconds, image ID {np.sum(currentImageSet / 10000)}')
             if operationType == 'ReLU':
@@ -67,31 +67,50 @@ class CNN:
                 ic(operation['outputImageSet'].shape)
                 currentImageSet = operation['outputImageSet']
                 print(f'Completed ReLU in {t.stop()} seconds, image ID {np.sum(currentImageSet / 10000)}')
-        ic(self.blueprint)
                 
 
-    def convolve(self, kernel, bias, images, train=False):
-        kernelShape = (kernel.shape[0], kernel.shape[1])
+    #kernels is a tensor, with dimensions arranged like this:
+        #shape: (1, 1, 1, image depth, kernel height, kernel width, number of kernels)
+    #This will be multiplied by another tensor, views, which stores all the views of all images of all kernels
+        #shape: (number of images, number of vertical strides, number of horizontal strides, image depth, kernel height, kernel width, 1)
+    
+    #any dimension that is a 1 on either of the above shapes will be broadcasted in the np.einsum call
+    #we can then activate numpy magic and literally do all thes hard work in 2 lines
+    def convolve(self, kernels, bias, images, train=False):
+        kernelShape = (kernels.shape[1], kernels.shape[2])
         
         #ensure that the views don't look anywhere except for up and down on the images with axis=(1,2)
+        # images = np.resize(images, images.shape + (kernel.shape[-1],))
+        # ic(images.shape)
         views = np.lib.stride_tricks.sliding_window_view(images, kernelShape, axis=(1, 2))
-        kernel = kernel[np.newaxis, np.newaxis, np.newaxis, ...] #modify kernel shape for broadcasting
+
+        #modify kernel and view shapes for broadcasting
+        views = views[..., np.newaxis]
+        kernels = kernels[np.newaxis, np.newaxis, np.newaxis, ...] 
 
         #element wise multiply the views with the kernels, then sum over a LOT of axes to get the final result
         #einsum is so smart it even broadcasts the element wise multiplication O_O
-        finalConvolution = np.einsum('ijklmn,ijklmn->ijk', views, kernel) 
+            #it is also the only method that doesn't crash my pc..
+        ic(views.shape)
+        ic(kernels.shape)
+        finalConvolution = np.einsum('ijklmno,ijklmno->ijko', views, kernels)
+        ic(finalConvolution.shape) 
         finalConvolution += bias 
 
-        ic(finalConvolution.shape)
+
 
         return finalConvolution
+    def maxPool(self, kernelShape, images):
+        views = np.lib.stride_tricks.as_strided(images, shape=(), kernelShape, axis=(1, 2))
+        ic(np.shape(views))
 
 
 
 rng = np.random.default_rng()
-first = CNN('data/Training-Set-10/*.png', [{
+first = CNN('data/Training-Set-10/*.png', [
+{
     'operationType': 'convolve', 
-    'kernel': (np.random.random_sample((3, 3, 3)) - 0.5), 
+    'kernel': (np.random.random_sample((3, 4, 4, 10)) - 0.5), 
     'bias': 0.05,
     'outputImageSet': None
 }, 
@@ -99,6 +118,8 @@ first = CNN('data/Training-Set-10/*.png', [{
     'operationType': 'ReLU',
     'outputImageSet': None
 }])
+
+first.maxPool((2, 2), first.images)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
