@@ -2,59 +2,35 @@ import cv2
 from icecream import ic
 import numpy as np
 import glob
+#-- timer for timing things yay --
+import time
 
-np.set_printoptions(threshold=1000)
+class TimerError(Exception):
+    """A custom exception used to report errors in use of Timer class"""
 
+class Timer:
+    def __init__(self):
+        self._start_time = None
 
-#flatImageSize: the typical "flat" image size that doesnt account for depth (ex: 36x64)
-#kernel size: again, another "flat" size that doesnt account for depth (ex: 3x3)
-#depth: the depth of the input volumes. since the depth of the input volume must match the depth of the kernel, it made
-#  sense to pass this as a seperate parameter instead of using 2 seperate dimensions with the same information.
- 
-def slidingWindowIndices(flatImageSize, kernelSize, depth): #gets the relevant sliding window indices so that a kernel can be easily convolved/cross-correlated
-    kernelSize = kernelSize[0]
-    kernelCellSize = pow(kernelSize, 2)
-    
-    imageHeight = flatImageSize[0]
-    imageWidth = flatImageSize[1]
-    fullImageCellSize = imageHeight * imageWidth
-    indices = np.arange(fullImageCellSize).reshape(imageHeight, imageWidth)
+    def start(self):
+        """Start a new timer"""
+        if self._start_time is not None:
+            raise TimerError(f"Timer is running. Use .stop() to stop it")
 
+        self._start_time = time.perf_counter()
 
+    def stop(self):
+        """Stop the timer, and report the elapsed time"""
+        if self._start_time is None:
+            raise TimerError(f"Timer is not running. Use .start() to start it")
 
-    offsets = np.zeros((kernelSize, kernelSize), dtype=int)
-    i = np.arange(kernelSize)
-    offsets[i, :] = (imageWidth - kernelSize) * i
-
-    offsets = offsets.flatten(order='F')
-
-    numberInvalidsOnEdge = kernelSize - 1     
-    imageWithoutInvalidPortions = indices[:-numberInvalidsOnEdge, :]
-    imageWithoutInvalidPortions = imageWithoutInvalidPortions[:, :-numberInvalidsOnEdge]
-
-    indexer = np.arange(kernelCellSize).reshape(1, -1) + imageWithoutInvalidPortions.reshape(-1, 1) + offsets
-
-    d = np.arange(depth)
-    newIndexer = np.zeros((np.shape(indexer)[0], (kernelCellSize * depth)))
-
-    
-    newPeek = np.zeros(depth)
-
-    newPeek = d * fullImageCellSize #add the offsets to peek depth-wise
+        elapsed_time = time.perf_counter() - self._start_time
+        self._start_time = None
+        print(f"Elapsed time: {elapsed_time:0.6f} seconds")
+# -- -- 
 
 
-    oldIndexShape = indexer.shape
-     
-    # ic(indexer)
-    indexer = np.broadcast_to(indexer, (depth, indexer.shape[0], indexer.shape[1])) #extend indexer array depth-wise 
-    newPeek = np.resize(newPeek, (depth, oldIndexShape[0], oldIndexShape[1])) #resize the repeated newPeek array so that each number of the old newPeek is now a matrix of old indexer's shape 
-    
-   
-    newIndexer = (indexer + newPeek).astype('int')
-    
-    newIndexer = np.concatenate(newIndexer, axis=1)
-
-    return newIndexer
+t = Timer()
 
 class CNN:
     def __init__(self, dir):
@@ -68,36 +44,21 @@ class CNN:
 
         print(f'Loaded {len(filenames)} images from "{dir}"')
 
-    def convolve(self, kernel, bias, depth=3, train=False):
-        images = self.images
-        indices = slidingWindowIndices((36, 64), (3, 3), 3)
-        fullImageCellSize = images.shape[1] * images.shape[2] * images.shape[3] #the number of indices in a full 3d image
-        numImages = images.shape[0] #number of images
-            
-        newIndices = np.broadcast_to(indices, (numImages, indices.shape[0], indices.shape[1])) #extend indices array depth-wise
-        imageWisePeek = np.arange(numImages) * (fullImageCellSize)
-        imageWisePeek = np.resize(imageWisePeek, (numImages, indices.shape[0], indices.shape[1])) #reshape the size of the peek to the size of the full image matrix
-    
-
-        newIndices = (newIndices + imageWisePeek).astype('int')
-
-     
-        ic(newIndices.shape)
-
-        windows = images.flatten()[newIndices]
-        ic(windows.shape)
-        # dotProducts = np.einsum('ijk,k->ij', windows, kernel.flatten()) #take dot product of each sliding window with the kernel
-        dotProducts = np.dot(windows, kernel.flatten())
-
+    def convolve(self, kernel, bias, images, train=False):
+        kernelShape = (3,3)
         
-        dotProducts += bias #add bias to all dot products of all images at once (numpy broadcasting is going in like 3 dimensions!)
+        views = np.lib.stride_tricks.sliding_window_view(images, kernelShape, axis=(1, 2))
+        kernel = kernel[None, None, None, ...] #modify kernel shape for broadcasting
 
-        dotProducts = np.resize(dotProducts, (numImages, images.shape[1]-kernel.shape[0]+1, images.shape[2]-kernel.shape[0]+1)) 
-        ic(dotProducts.shape)
+        #element wise multiply the views with the kernels, then sum over a LOT of axes to get the final result
+        #einsum is so smart it even broadcasts the element wise multiplication O_O
+        finalConvolution = np.einsum('ijklmn,ijklmn->ijk', views, kernel) 
+  
+        ic(finalConvolution.shape)
+        
         
 
-
-
+        
         if not train: 
             self.log.append({
                 'type': 'convolution',
@@ -106,19 +67,14 @@ class CNN:
                 #'outputs': convolved #contains all of the now convoluted images
             })
         
-        
-    def flatten(self, train=False):
-        lastOutputs = np.array(self.log[-1]['outputs'])
-        flattenedOutputsTwo = lastOutputs.reshape(3000, -1)
-        ic(np.shape(flattenedOutputsTwo))
 
+        
+    def ReLU(self, matrix):
+        return np.maximum(0, matrix)
 
 
 first = CNN('data/Training-Set-10/*.png')
-first.convolve(np.arange(27).reshape(3, 3, 3), 10)
-
-
-#ic(slidingWindowIndices((6, 6), (3, 3), 3))
+first.convolve(np.arange(27).reshape(3, 3, 3), 10, first.images)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
